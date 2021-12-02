@@ -2,6 +2,16 @@
 
 import policy
 import simulator
+from policy import NewPolicy
+
+class MLPModel(MLPClassifier):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        
+    def get_probabilities(self, features, action):
+        features = features.assign(**{action:np.ones(features.shape[0])})
+
+        return self.predict_proba(features)
 
 
 ## Baseline simulator parameters
@@ -25,7 +35,8 @@ X = population.generate(n_population)
 # Generate vaccination results
 
 print("Vaccination")
-vaccine_policy = policy.RandomPolicy(n_vaccines, list(range(-1,n_vaccines))) # make sure to add -1 for 'no vaccine'
+vaccine_policy = NewPolicy(n_vaccines, list(range(-1,n_vaccines)), 
+                           MLPModel(activation='logistic', random_state=0)) # make sure to add -1 for 'no vaccine'
 
 
 print("With a for loop")
@@ -63,7 +74,8 @@ for k in range(3):
 
 # We can do the same for treatments
 print("Treatment")
-treatment_policy = policy.RandomPolicy(n_treatments, list(range(n_treatments)))
+treatment_policy = NewPolicy(n_treatments, list(range(n_treatments)),
+                                   MLPModel(activation='logistic', random_state=0))
 
 A = treatment_policy.get_action(X)
 Y = population.treat(list(range(n_population)), A)
