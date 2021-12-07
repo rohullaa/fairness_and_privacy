@@ -6,6 +6,7 @@
 ## outcomes: symptoms (including covid-positive)
 
 import numpy as np
+import pandas as pd
 from auxilliary import symptom_names
 
 class Policy:
@@ -123,5 +124,88 @@ class RandomPolicy(Policy):
                 actions[t,action] = 1
             
         return actions
+    
+    
+class NewPolicy(Policy):
+    def __init__(self, n_actions, action_set, model):
+        super().__init__(n_actions, action_set)
+        self.model = model
+        
+        self.weights = {'Covid-Recovered': 0, 
+                         'Covid-Positive': .2, 
+                         'No-Taste/Smell': .1, 
+                         'Fever': .1, 
+                         'Headache': .1,
+                         'Pneumonia': .5,
+                         'Stomach': .2, 
+                         'Myocarditis': .5, 
+                         'Blood-Clots': 1,
+                         'Death': 100}
+        self.X = None
+        self.y = None
+    
+    def observe(self, features, action, outcome):
+        if self.X is None or self.y is None:
+            self.X= pd.DataFrame(columns=list(features) + [key for key in action if key not in features])
+            self.y = np.zeros((0, outcome.shape[1]))
+        
+        self.X = pd.concat((self.X, features.assign(**{str(key):action[key] for key in action})))
+        self.y = np.vstack((self.y, np.array(outcome)))
+
+        self.model.fit(self.X, self.y)
+
+        
+    def get_utility(self, features, action, outcome):
+        """ Assume here that the actions get progressively more costly, so associate somewhat lower
+        utility to later actions. Outcomes are weighted more highly than the previous condition here, 
+        but it is still better to have had a symptom and then remove it, than just never having had
+        the symptom. E.g.
+        Had a symptom, now not = 0.7 - 0 = 0.7 utility
+        had a symptom, still have it = 0.7 - 1 = -0.3 utility
+        never had the symptom = 0 - 0 - 0 utility
+        
+        This also means that doing actions on people with no symptoms will be associated with negative utility.
+        
+        Inputs are assumed to contain binary features. 
+        """
+        utility = 0
+        for key in action:
+            utility -= sum(action[key]) * np.log(self.action_set.index(key) + 10) / 100
+            
+        #actions = self.get_action(features)
+        for key, weight in self.weights.items():
+            utility += weight * sum(0.7 * features.loc[:, key] - outcome.loc[:, key])
+        
+        return utility
+    
+    def get_expected_utility(self, action, p):
+        utility = np.zeros(p.shape[0])
+        utility -= np.log(self.action_set.index(action) + 10) / 100
+    
+        weights = np.array(list(self.weights.values()))
+        
+        utility -= (p @ weights.T)
+        
+        return utility
+             
+    
+    def get_action(self, features):
+        """ Get actions for one or more people. 
+        Args: 
+        features (t*|X| array)
+        Returns: 
+        actions (t*|A| array)
+        """
+        features = features.assign(**{str(key):np.zeros(features.shape[0])
+                                      for key in self.action_set})
+        u = []
+        for action in (self.action_set):
+            p = self.model.get_probabilities(features, action)
+            u.append(self.get_expected_utility(action, p))
+
+        args =  np.argmax(u, axis=0)
+        res = np.zeros((features.shape[0], len(self.action_set)))
+        res[np.arange(res.shape[0]), args] = 1
+        return res
 
 

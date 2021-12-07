@@ -212,11 +212,13 @@ class Population:
 
     ## Treats a population
     def treatment(self, X, policy):
-        treatments = np.zeros([X.shape[0], self.n_treatments])
+        #treatments = np.zeros([X.shape[0], self.n_treatments])
         result = np.zeros([X.shape[0], self.n_symptoms])
+        treatments = policy.get_action(X)
+        X = np.array(X)
         for t in range(X.shape[0]):
             #print ("X:", result[t])
-            treatments[t] = policy.get_action(X[t].reshape(1,-1))
+            #treatments[t] = policy.get_action(X[t].reshape(1,-1))
             r = np.array(np.matrix(treatments[t]) * self.A).flatten()
             for k in range(self.n_symptoms):
                 if (k <= 1):
